@@ -26,6 +26,7 @@
 #include <lttng/ust-tracer.h>
 #include <lttng/ringbuffer-config.h>
 #include "ltt-tracer-core.h"
+#include <lttng/ust-tid.h>
 
 #ifdef __linux__
 #include <syscall.h>
@@ -45,6 +46,7 @@ static inline pid_t gettid(void)
 	return getpid();
 }
 #endif
+======= end
 
 /*
  * We cache the result to ensure we don't trigger a system call for
