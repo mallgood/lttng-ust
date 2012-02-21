@@ -47,7 +47,7 @@
 #include <helper.h>
 #include "error.h"
 #include "compat.h"
-#include "uuid.h"
+#include "lttng-ust-uuid.h"
 
 #include "tracepoint-internal.h"
 #include "ltt-tracer.h"
