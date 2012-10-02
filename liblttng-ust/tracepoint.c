@@ -381,6 +381,43 @@ static void lib_update_tracepoints(void)
 	}
 }
 
+/**
+ * tracepoint_update_callsite_range - Update a callsite range
+ * @begin: beginning of the range
+ * @end: end of the range
+ *
+ * Updates the range of tracepoint call sites.
+ */
+static
+void tracepoint_enable_callsite_range(struct tracepoint_callsite * const *begin,
+				   struct tracepoint_callsite * const *end)
+{
+	struct tracepoint_callsite * const *iter;
+	int ret;
+
+	for (iter = begin; iter < end; iter++) {
+		if (!*iter)
+			continue;	/* skip dummy */
+		ret = lttng_callsite_add(*iter);
+		assert(!ret);
+	}
+}
+
+static
+void tracepoint_disable_callsite_range(struct tracepoint_callsite * const *begin,
+			struct tracepoint_callsite * const *end)
+{
+	struct tracepoint_callsite * const *iter;
+	int ret;
+
+	for (iter = begin; iter < end; iter++) {
+		if (!*iter)
+			continue;	/* skip dummy */
+		ret = lttng_callsite_remove(*iter);
+		assert(!ret);
+	}
+}
+
 /*
  * Update probes, removing the faulty probes.
  */
@@ -681,6 +718,43 @@ found:
 		tracepoints_start);
 end:
 	pthread_mutex_unlock(&tracepoint_mutex);
+	return 0;
+}
+
+int tracepoint_register_lib_callsite(struct tracepoint_callsite * const *tp_start,
+			    int tp_count)
+{
+	int real_count = 0;	/* without dummy */
+
+	init_tracepoint();
+
+	tracepoint_enable_callsite_range(tp_start, tp_start + tp_count);
+
+	if (ust_debug()) {
+		int i;
+
+		for (i = 0; i < tp_count; i++) {
+			if (!tp_start[i])	/* Check for dummy */
+				continue;
+			DBG("registered callsite for tracepoint \"%s\" at %s@%s:%u",
+				tp_start[i]->tp->name,
+				tp_start[i]->func,
+				tp_start[i]->file,
+				tp_start[i]->lineno);
+			real_count++;
+		}
+	}
+	DBG("just registered a tracepoint callsite section from %p and having %d call sites",
+		tp_start, real_count);
+	return 0;
+}
+
+int tracepoint_unregister_lib_callsite(struct tracepoint_callsite * const *tp_start,
+			    int tp_count)
+{
+	tracepoint_disable_callsite_range(tp_start, tp_start + tp_count);
+	DBG("just unregistered a tracepoints callsite section from %p",
+		tp_start);
 	return 0;
 }
 

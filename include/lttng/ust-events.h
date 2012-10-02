@@ -299,6 +299,11 @@ struct ust_pending_probe;
 struct ltt_event;
 struct lttng_ust_filter_bytecode;
 
+struct lttng_callsite {
+	const struct tracepoint_callsite *tp_cs;
+	struct cds_hlist_node node;	/* Callsite hash table node */
+};
+
 /*
  * ltt_event structure is referred to by the tracing fast path. It must be
  * kept small.

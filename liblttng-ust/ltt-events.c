@@ -98,6 +98,14 @@ struct ust_pending_probe {
 	char name[];
 };
 
+/*
+ * Callsite hash table, containing the registered callsites.
+ * Protected by the sessions mutex.
+ */
+#define CALLSITE_HASH_BITS		6
+#define CALLSITE_HASH_SIZE		(1 << CALLSITE_HASH_BITS)
+static struct cds_hlist_head callsite_table[CALLSITE_HASH_SIZE];
+
 static void _ltt_event_destroy(struct ltt_event *event);
 static void _ltt_wildcard_destroy(struct session_wildcard *sw);
 static void _ltt_channel_destroy(struct ltt_channel *chan);
@@ -106,6 +114,10 @@ static
 int _ltt_event_metadata_statedump(struct ltt_session *session,
 				  struct ltt_channel *chan,
 				  struct ltt_event *event);
+static
+int _ltt_callsite_metadata_statedump(struct ltt_session *session,
+				  struct lttng_callsite *callsite);
+
 static
 int _ltt_session_metadata_statedump(struct ltt_session *session);
 
@@ -298,6 +310,104 @@ int pending_probe_fix_events(const struct lttng_event_desc *desc)
 				event);
 		lttng_filter_event_link_bytecode(event,
 			event->filter_bytecode);
+	}
+	return ret;
+}
+
+/*
+ * Called at library load: add callsite information.
+ * Takes the session mutex.
+ * Should _not_ be called with tracepoint mutex held (would cause
+ * deadlock with session mutex).
+ */
+int lttng_callsite_add(const struct tracepoint_callsite *tp_cs)
+{
+	struct cds_hlist_head *head;
+	struct lttng_callsite *cs_node;
+	struct ltt_session *session;
+	uint32_t hash;
+	int ret;
+
+	ust_lock();
+	/* hash by pointer value */
+	hash = jhash(&tp_cs, sizeof(tp_cs), 0);
+	head = &callsite_table[hash & (CALLSITE_HASH_SIZE - 1)];
+	cs_node = zmalloc(sizeof(struct lttng_callsite));
+	if (!cs_node)
+		goto error_mem;
+	cds_hlist_add_head(&cs_node->node, head);
+	cs_node->tp_cs = tp_cs;
+
+	/* print metadata for each session */
+	cds_list_for_each_entry(session, &sessions, list) {
+		ret = _ltt_callsite_metadata_statedump(session, cs_node);
+		assert(!ret);
+	}
+	ust_unlock();
+	return 0;
+
+error_mem:
+	ust_unlock();
+	return -ENOMEM;
+}
+
+/*
+ * Called at library unload: remove callsite information.
+ * Takes the session mutex.
+ * Should _not_ be called with tracepoint mutex held (would cause
+ * deadlock with session mutex).
+ */
+int lttng_callsite_remove(const struct tracepoint_callsite *tp_cs)
+{
+	struct cds_hlist_head *head;
+	struct cds_hlist_node *node;
+	struct lttng_callsite *cs_node;
+	uint32_t hash;
+	int found = 0;
+
+	ust_lock();
+	/* hash by pointer value */
+	hash = jhash(&tp_cs, sizeof(tp_cs), 0);
+	head = &callsite_table[hash & (CALLSITE_HASH_SIZE - 1)];
+	cds_hlist_for_each_entry(cs_node, node, head, node) {
+		if (cs_node->tp_cs == tp_cs) {
+			found = 1;
+			break;
+		}
+	}
+	if (!found)
+		goto error;
+	cds_hlist_del(&cs_node->node);
+	free(cs_node);
+	ust_unlock();
+	return 0;
+
+error:
+	ust_unlock();
+	return -ENOENT;
+}
+
+/*
+ * Called with ust mutex held.
+ */
+static
+int _callsite_session_metadata_statedump(struct ltt_session *session)
+{
+	int ret = 0;
+	unsigned int i;
+
+	for (i = 0; i < CALLSITE_HASH_SIZE; i++) {
+		struct cds_hlist_head *head;
+		struct cds_hlist_node *node;
+		struct lttng_callsite *cs_node;
+
+		head = &callsite_table[i];
+		cds_hlist_for_each_entry(cs_node, node, head, node) {
+			ret = _ltt_callsite_metadata_statedump(session,
+							cs_node);
+			if (ret)
+				return ret;
+		}
 	}
 	return ret;
 }
@@ -893,6 +1003,32 @@ int _ltt_fields_metadata_statedump(struct ltt_session *session,
 }
 
 static
+int _ltt_callsite_metadata_statedump(struct ltt_session *session,
+				  struct lttng_callsite *callsite)
+{
+	int ret = 0;
+
+	if (!CMM_ACCESS_ONCE(session->active))
+		return 0;
+
+	ret = lttng_metadata_printf(session,
+		"callsite {\n"
+		"	name = \"%s\";\n"
+		"	func = \"%s\";\n"
+		"	file = \"%s\";\n"
+		"	line = %u;\n"
+		"};\n\n",
+		callsite->tp_cs->tp->name,
+		callsite->tp_cs->func,
+		callsite->tp_cs->file,
+		callsite->tp_cs->lineno);
+	if (ret)
+		goto end;
+end:
+	return ret;
+}
+
+static
 int _ltt_event_metadata_statedump(struct ltt_session *session,
 				  struct ltt_channel *chan,
 				  struct ltt_event *event)
@@ -1262,6 +1398,9 @@ int _ltt_session_metadata_statedump(struct ltt_session *session)
 		goto end;
 
 	ret = _ltt_event_header_declare(session);
+	if (ret)
+		goto end;
+	ret = _callsite_session_metadata_statedump(session);
 	if (ret)
 		goto end;
 

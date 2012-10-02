@@ -31,6 +31,12 @@ struct tracepoint_lib {
 	int tracepoints_count;
 };
 
+struct tracepoint_callsite_lib {
+	struct cds_list_head list;
+	struct tracepoint_callsite * const *tp_start;
+	int tp_count;
+};
+
 extern int tracepoint_probe_register_noupdate(const char *name,
 		void (*callback)(void), void *priv,
 		const char *signature);
@@ -49,5 +55,8 @@ static inline void tracepoint_synchronize_unregister(void)
 
 extern void init_tracepoint(void);
 extern void exit_tracepoint(void);
+
+int lttng_callsite_add(const struct tracepoint_callsite *tp_cs);
+int lttng_callsite_remove(const struct tracepoint_callsite *tp_cs);
 
 #endif /* _LTTNG_TRACEPOINT_INTERNAL_H */

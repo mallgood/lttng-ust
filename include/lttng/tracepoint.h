@@ -37,6 +37,7 @@ extern "C" {
 
 #define tracepoint(provider, name, ...)					    \
 	do {								    \
+		TRACEPOINT_CALLSITE(provider, name);			    \
 		STAP_PROBEV(provider, name, ## __VA_ARGS__);		    \
 		if (caa_unlikely(__tracepoint_##provider##___##name.state)) \
 			__tracepoint_cb_##provider##___##name(__VA_ARGS__); \
@@ -204,6 +205,103 @@ struct tracepoint_dlopen {
 };
 
 extern struct tracepoint_dlopen tracepoint_dlopen;
+
+struct tracepoint_callsite_dlopen {
+	void *liblttngust_handle;
+
+	int (*tracepoint_register_lib_callsite)(struct tracepoint_callsite * const *tp_start,
+		int tp_count);
+	int (*tracepoint_unregister_lib_callsite)(struct tracepoint_callsite * const *tp_start,
+		int tp_count);
+};
+
+struct tracepoint_callsite_dlopen tracepoint_callsite_dlopen
+	__attribute__((weak, visibility("hidden")));
+int __tracepoint_callsite_registered
+	__attribute__((weak, visibility("hidden")));
+
+/*
+ * Note: to allow PIC code, we need to allow the linker to update the pointers
+ * in the __tracepoints_callsite_ptrs section.
+ * Therefore, this section is _not_ const (read-only).
+ */
+#define TRACEPOINT_CALLSITE(_provider, _name)					\
+	static struct tracepoint_callsite					\
+		__tracepoint_callsite_##_provider##___##_name			\
+		__attribute__((section("__tracepoint_callsite"))) =		\
+		{								\
+			.tp = &__tracepoint_##_provider##___##_name,		\
+			.func = __func__,					\
+			.file = __FILE__,					\
+			.lineno = __LINE__,					\
+		};								\
+	static struct tracepoint_callsite *					\
+		__tracepoint_callsite_ptr_##_provider##___##_name		\
+		__attribute__((used, section("__tracepoint_callsite_ptrs"))) =	\
+			&__tracepoint_callsite_##_provider##___##_name
+
+/*
+ * These weak symbols, the constructor, and destructor take care of
+ * registering only _one_ instance of the tracepoint callsite per
+ * shared-ojbect (or for the whole main program).
+ */
+extern struct tracepoint_callsite * const __start___tracepoint_callsite_ptrs[]
+	__attribute__((weak, visibility("hidden")));
+extern struct tracepoint_callsite * const __stop___tracepoint_callsite_ptrs[]
+	__attribute__((weak, visibility("hidden")));
+
+/*
+ * We need at least one pointer in the section.
+ */
+static struct tracepoint_callsite *
+	__tracepoint_callsite_ptr_dummy
+	__attribute__((used, section("__tracepoint_callsite_ptrs"))) =
+		NULL;
+
+static void lttng_ust_notrace __attribute__((constructor))
+__tracepoint_callsite__init(void);
+static void
+__tracepoint_callsite__init(void)
+{
+	if (__tracepoint_callsite_registered++)
+		return;
+
+	tracepoint_callsite_dlopen.liblttngust_handle =
+		dlopen("liblttng-ust-tracepoint.so.0", RTLD_NOW | RTLD_GLOBAL);
+	if (!tracepoint_callsite_dlopen.liblttngust_handle)
+		return;
+	tracepoint_callsite_dlopen.tracepoint_register_lib_callsite =
+		URCU_FORCE_CAST(int (*)(struct tracepoint_callsite * const *, int),
+				dlsym(tracepoint_callsite_dlopen.liblttngust_handle,
+					"tracepoint_register_lib_callsite"));
+	tracepoint_callsite_dlopen.tracepoint_unregister_lib_callsite =
+		URCU_FORCE_CAST(int (*)(struct tracepoint_callsite * const *, int),
+				dlsym(tracepoint_callsite_dlopen.liblttngust_handle,
+					"tracepoint_unregister_lib_callsite"));
+	tracepoint_callsite_dlopen.tracepoint_register_lib_callsite(__start___tracepoint_callsite_ptrs,
+				__stop___tracepoint_callsite_ptrs -
+				__start___tracepoint_callsite_ptrs);
+}
+
+static void lttng_ust_notrace __attribute__((destructor))
+__tracepoint_callsite__destroy(void);
+static void
+__tracepoint_callsite__destroy(void)
+{
+	int ret;
+
+	if (--__tracepoint_callsite_registered)
+		return;
+	if (tracepoint_callsite_dlopen.tracepoint_unregister_lib_callsite)
+		tracepoint_callsite_dlopen.tracepoint_unregister_lib_callsite(__start___tracepoint_callsite_ptrs,
+				__stop___tracepoint_callsite_ptrs -
+				__start___tracepoint_callsite_ptrs);
+	if (tracepoint_callsite_dlopen.liblttngust_handle) {
+		ret = dlclose(tracepoint_callsite_dlopen.liblttngust_handle);
+		assert(!ret);
+		memset(&tracepoint_callsite_dlopen, 0, sizeof(tracepoint_callsite_dlopen));
+	}
+}
 
 #ifdef TRACEPOINT_DEFINE
 
