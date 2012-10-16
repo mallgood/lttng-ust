@@ -736,9 +736,10 @@ int tracepoint_register_lib_callsite(struct tracepoint_callsite * const *tp_star
 		for (i = 0; i < tp_count; i++) {
 			if (!tp_start[i])	/* Check for dummy */
 				continue;
-			DBG("registered callsite for tracepoint \"%s\" at %s@%s:%u",
-				tp_start[i]->tp->name,
+			DBG("registered callsite for tracepoint \"%s\" at %s@%p:%s:%u",
+				tp_start[i]->name,
 				tp_start[i]->func,
+				tp_start[i]->ip,
 				tp_start[i]->file,
 				tp_start[i]->lineno);
 			real_count++;

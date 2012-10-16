@@ -220,25 +220,34 @@ struct tracepoint_callsite_dlopen tracepoint_callsite_dlopen
 int __tracepoint_callsite_registered
 	__attribute__((weak, visibility("hidden")));
 
+#if (CAA_BITS_PER_LONG == 64)
+#define __TP_ASM_PTR	".quad "
+#else
+#define __TP_ASM_PTR	".long "
+#endif
+
 /*
  * Note: to allow PIC code, we need to allow the linker to update the pointers
  * in the __tracepoints_callsite_ptrs section.
  * Therefore, this section is _not_ const (read-only).
  */
 #define TRACEPOINT_CALLSITE(_provider, _name)					\
-	static struct tracepoint_callsite					\
-		__tracepoint_callsite_##_provider##___##_name			\
-		__attribute__((section("__tracepoint_callsite"))) =		\
-		{								\
-			.tp = &__tracepoint_##_provider##___##_name,		\
-			.func = __func__,					\
-			.file = __FILE__,					\
-			.lineno = __LINE__,					\
-		};								\
-	static struct tracepoint_callsite *					\
-		__tracepoint_callsite_ptr_##_provider##___##_name		\
-		__attribute__((used, section("__tracepoint_callsite_ptrs"))) =	\
-			&__tracepoint_callsite_##_provider##___##_name
+do {										\
+	asm volatile (	".pushsection __tracepoint_callsite, \"aw\"\n\t"	\
+			"1:\n\t"						\
+			__TP_ASM_PTR "%c0, %c1, %c2, 2f\n\t"			\
+			".int %c3\n\t"						\
+			".space 16\n\t"	/* padding */				\
+			".popsection\n\t"					\
+			".pushsection __tracepoint_callsite_ptrs, \"aw\"\n\t"	\
+			__TP_ASM_PTR "1b\n\t"					\
+			".popsection\n\t"					\
+			"2:\n\t"						\
+		: : "i" (#_provider ":" #_name),		 		\
+			"i" (__func__),						\
+			"i" (__FILE__),						\
+			"i" (__LINE__));					\
+} while (0)
 
 /*
  * These weak symbols, the constructor, and destructor take care of

@@ -32,11 +32,12 @@ struct tracepoint {
 
 #define TRACEPOINT_CALLSITE_PADDING	16
 struct tracepoint_callsite {
-	const struct tracepoint *tp;
+	const char *name;
 	const char *func;
 	const char *file;
+	void *ip;
 	unsigned int lineno;
 	char padding[TRACEPOINT_CALLSITE_PADDING];
-};
+} __attribute__((packed));
 
 #endif /* _LTTNG_TRACEPOINT_TYPES_H */

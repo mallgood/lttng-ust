@@ -1016,11 +1016,13 @@ int _ltt_callsite_metadata_statedump(struct ltt_session *session,
 		"callsite {\n"
 		"	name = \"%s\";\n"
 		"	func = \"%s\";\n"
+		"	ip = %p;\n"
 		"	file = \"%s\";\n"
 		"	line = %u;\n"
 		"};\n\n",
-		callsite->tp_cs->tp->name,
+		callsite->tp_cs->name,
 		callsite->tp_cs->func,
+		callsite->tp_cs->ip,
 		callsite->tp_cs->file,
 		callsite->tp_cs->lineno);
 	if (ret)
