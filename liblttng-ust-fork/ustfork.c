@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2009  Pierre-Marc Fournier
- * Copyright (C) 2011  Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
+ * Copyright (C) 2011-2012  Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -38,6 +38,7 @@ pid_t fork(void)
 		plibc_func = dlsym(RTLD_NEXT, "fork");
 		if (plibc_func == NULL) {
 			fprintf(stderr, "libustfork: unable to find \"fork\" symbol\n");
+			errno = ENOSYS;
 			return -1;
 		}
 	}
@@ -49,6 +50,34 @@ pid_t fork(void)
 		/* child */
 		ust_after_fork_child(&sigset);
 	} else {
+		ust_after_fork_parent(&sigset);
+	}
+	return retval;
+}
+
+int daemon(int nochdir, int noclose)
+{
+	static int (*plibc_func)(int nochdir, int noclose) = NULL;
+	sigset_t sigset;
+	int retval;
+
+	if (plibc_func == NULL) {
+		plibc_func = dlsym(RTLD_NEXT, "daemon");
+		if (plibc_func == NULL) {
+			fprintf(stderr, "libustfork: unable to find \"daemon\" symbol\n");
+			errno = ENOSYS;
+			return -1;
+		}
+	}
+
+	ust_before_fork(&sigset);
+	/* Do the real daemon call */
+	retval = plibc_func(nochdir, noclose);
+	if (retval == 0) {
+		/* child, parent called _exit() directly */
+		ust_after_fork_child(&sigset);
+	} else {
+		/* on error in the parent */
 		ust_after_fork_parent(&sigset);
 	}
 	return retval;
@@ -96,6 +125,7 @@ int clone(int (*fn)(void *), void *child_stack, int flags, void *arg, ...)
 		plibc_func = dlsym(RTLD_NEXT, "clone");
 		if (plibc_func == NULL) {
 			fprintf(stderr, "libustfork: unable to find \"clone\" symbol.\n");
+			errno = ENOSYS;
 			return -1;
 		}
 	}
@@ -132,6 +162,7 @@ pid_t rfork(int flags)
 		plibc_func = dlsym(RTLD_NEXT, "rfork");
 		if (plibc_func == NULL) {
 			fprintf(stderr, "libustfork: unable to find \"rfork\" symbol\n");
+			errno = ENOSYS;
 			return -1;
 		}
 	}
