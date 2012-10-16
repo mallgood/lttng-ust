@@ -35,12 +35,13 @@
 extern "C" {
 #endif
 
-#define tracepoint(provider, name, ...)					    \
-	do {								    \
-		TRACEPOINT_CALLSITE(provider, name);			    \
-		STAP_PROBEV(provider, name, ## __VA_ARGS__);		    \
-		if (caa_unlikely(__tracepoint_##provider##___##name.state)) \
-			__tracepoint_cb_##provider##___##name(__VA_ARGS__); \
+#define tracepoint(provider, name, ...)					      \
+	do {								      \
+		STAP_PROBEV(provider, name, ## __VA_ARGS__);		      \
+		if (caa_unlikely(__tracepoint_##provider##___##name.state)) { \
+			__tracepoint_cb_##provider##___##name(__VA_ARGS__);   \
+			TRACEPOINT_CALLSITE(provider, name);		      \
+		}							      \
 	} while (0)
 
 #define TP_ARGS(...)       __VA_ARGS__
