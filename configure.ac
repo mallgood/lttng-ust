@@ -169,6 +169,10 @@ got it
                     [ust_cv_i386_is_x86_64=no])
                     CPPFLAGS="$save_CPPFLAGS"])
     ;;
+    # All symbols must be resolved at link time on Cygwin/MinGW/Windows,
+    # else libtool will not be able to build shared libraries.
+    *-*-cygwin*)
+    LDFLAGS="-Wl,-no-undefined $LDFLAGS";;
 esac
 
 AC_MSG_CHECKING([library format for the host system])
