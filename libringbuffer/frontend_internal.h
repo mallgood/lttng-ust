@@ -457,11 +457,20 @@ void lib_ring_buffer_check_deliver(const struct lttng_ust_lib_ring_buffer_config
 						ret = write(wakeup_fd, "", 1);
 					} while (ret == -1L && errno == EINTR);
 					if (ret == -1L && errno == EPIPE && !sigpipe_was_pending) {
-						struct timespec timeout = { 0, 0 };
-						do {
-							ret = sigtimedwait(&sigpipe_set, NULL,
-								&timeout);
-						} while (ret == -1L && errno == EINTR);
+						ret = sigpending(&pending_set);
+						assert(!ret);
+
+						if (sigismember(&pending_set, SIGPIPE)) {
+							/*
+							 * Kill ourselves with SIGPIPE and wait on
+							 * delivery, thus effectively discarding it.
+							 */
+							pthread_t self = pthread_self();
+							pthread_kill(self, SIGPIPE);
+							do {
+								ret = sigwaitinfo(&sigpipe_set, NULL);
+							} while (ret == -1L && errno == EINTR);
+						}
 					}
 					if (!sigpipe_was_pending) {
 						ret = pthread_sigmask(SIG_SETMASK, &old_set, NULL);
