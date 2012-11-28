@@ -34,7 +34,7 @@ void lttng_ust_getprocname(char *name)
 	(void) prctl(PR_GET_NAME, (unsigned long) name, 0, 0, 0);
 }
 
-#elif defined(__FreeBSD__)
+#elif defined(__FreeBSD__) || defined(__CYGWIN__)
 #include <stdlib.h>
 #include <string.h>
 
