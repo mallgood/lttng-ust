@@ -281,6 +281,13 @@ AS_IF([test "x$with_sdt" = "xyes"],[
 
 #	liblttng-ust-java/Makefile
 
+# Disabled for now, because these libraries
+# rely on the dlsym(3) RTLD_NEXT GNU extension.
+# This is not implemented in Cygwin.
+#liblttng-ust-fork/Makefile
+#liblttng-ust-libc-wrapper/Makefile
+#tests/fork/Makefile
+
 AC_CONFIG_FILES([
 	Makefile
 	doc/Makefile
@@ -292,15 +299,12 @@ AC_CONFIG_FILES([
 	liblttng-ust-comm/Makefile
 	liblttng-ust/Makefile
 	liblttng-ust-ctl/Makefile
-	liblttng-ust-fork/Makefile
-	liblttng-ust-libc-wrapper/Makefile
 	tools/Makefile
 	tests/Makefile
 	tests/hello/Makefile
 	tests/hello-static-lib/Makefile
 	tests/hello.cxx/Makefile
 	tests/demo/Makefile
-	tests/fork/Makefile
 	tests/ust-basic-tracing/Makefile
 	tests/ust-multi-test/Makefile
 	lttng-ust.pc
