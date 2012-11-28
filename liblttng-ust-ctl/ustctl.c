@@ -31,6 +31,23 @@
 
 volatile enum ust_loglevel ust_loglevel;
 
+static int dummy_pipe[2];
+
+static
+void __attribute__((constructor)) setup_dummy_pipe(void)
+{
+	pipe(dummy_pipe);
+	/* Only dummy_pipe[0] is used */
+	close(dummy_pipe[1]);
+	/* FIXME: Handle pipe() failure */
+}
+
+static
+inline int get_dummy_fd(void)
+{
+	return dup(dummy_pipe[0]);
+}
+
 static
 void init_object(struct lttng_ust_object_data *data)
 {
@@ -188,7 +205,7 @@ int ustctl_open_metadata(int sock, int session_handle,
 		err = 1;
 	} else {
 		DBG("Received shm path: %s\n", shm_path);
-		metadata_data->shm_fd = -1;
+		metadata_data->shm_fd = get_dummy_fd();
 		metadata_data->shm_path = shm_path;
 	}
 
@@ -204,7 +221,7 @@ int ustctl_open_metadata(int sock, int session_handle,
 		err = 1;
 	} else {
 		DBG("Received wait pipe path: %s\n", wait_pipe_path);
-		metadata_data->wait_fd = -1;
+		metadata_data->wait_fd = get_dummy_fd();
 		metadata_data->wait_pipe_path = wait_pipe_path;
 	}
 
@@ -265,7 +282,7 @@ int ustctl_create_channel(int sock, int session_handle,
 		err = 1;
 	} else {
 		DBG("Received shm path: %s\n", shm_path);
-		channel_data->shm_fd = -1;
+		channel_data->shm_fd = get_dummy_fd();
 		channel_data->shm_path = shm_path;
 	}
 
@@ -280,7 +297,7 @@ int ustctl_create_channel(int sock, int session_handle,
 		err = 1;
 	} else {
 		DBG("Received wait pipe path: %s\n", wait_pipe_path);
-		channel_data->wait_fd = -1;
+		channel_data->wait_fd = get_dummy_fd();
 		channel_data->wait_pipe_path = wait_pipe_path;
 	}
 
@@ -338,7 +355,7 @@ int ustctl_create_stream(int sock, struct lttng_ust_object_data *channel_data,
 		err = 1;
 	} else {
 		DBG("Received shm path: %s\n", shm_path);
-		stream_data->shm_fd = -1;
+		stream_data->shm_fd = get_dummy_fd();
 		stream_data->shm_path = shm_path;
 	}
 
@@ -353,7 +370,7 @@ int ustctl_create_stream(int sock, struct lttng_ust_object_data *channel_data,
 		err = 1;
 	} else {
 		DBG("Received wait pipe path: %s\n", wait_pipe_path);
-		stream_data->wait_fd = -1;
+		stream_data->wait_fd = get_dummy_fd();
 		stream_data->wait_pipe_path = wait_pipe_path;
 	}
 
