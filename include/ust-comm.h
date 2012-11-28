@@ -174,4 +174,8 @@ extern int ustcomm_send_app_cmd(int sock,
 		struct ustcomm_ust_reply *lur);
 int ustcomm_recv_fd(int sock);
 
+/* Send/recv string over unix socket */
+extern ssize_t ustcomm_send_string(int sock, char *str, size_t len);
+extern char *ustcomm_recv_string(int sock);
+
 #endif	/* _LTTNG_UST_COMM_H */

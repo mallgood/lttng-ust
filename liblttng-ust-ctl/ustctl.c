@@ -36,7 +36,9 @@ void init_object(struct lttng_ust_object_data *data)
 {
 	data->handle = -1;
 	data->shm_fd = -1;
+	data->shm_path = NULL;
 	data->wait_fd = -1;
+	data->wait_pipe_path = NULL;
 	data->memory_map_size = 0;
 }
 
@@ -74,12 +76,22 @@ int ustctl_release_object(int sock, struct lttng_ust_object_data *data)
 			return ret;
 		}
 	}
+
+	if (data->shm_path) {
+		free(data->shm_path);
+	}
+
 	if (data->wait_fd >= 0) {
 		ret = close(data->wait_fd);
 		if (ret < 0) {
 			return ret;
 		}
 	}
+
+	if (data->wait_pipe_path) {
+		free(data->wait_pipe_path);
+	}
+
 	return ustctl_release_handle(sock, data->handle);
 }
 
@@ -139,6 +151,7 @@ int ustctl_open_metadata(int sock, int session_handle,
 	struct ustcomm_ust_reply lur;
 	struct lttng_ust_object_data *metadata_data;
 	int ret, err = 0;
+	char *shm_path, *wait_pipe_path;
 
 	if (!chops || !_metadata_data)
 		return -EINVAL;
@@ -169,22 +182,33 @@ int ustctl_open_metadata(int sock, int session_handle,
 	metadata_data->handle = lur.ret_val;
 	DBG("received metadata handle %u", metadata_data->handle);
 	metadata_data->memory_map_size = lur.u.channel.memory_map_size;
-	/* get shm fd */
-	ret = ustcomm_recv_fd(sock);
-	if (ret < 0)
+	/* get shm path */
+	shm_path = ustcomm_recv_string(sock);
+	if (!shm_path) {
 		err = 1;
-	else
-		metadata_data->shm_fd = ret;
+	} else {
+		DBG("Received shm path: %s\n", shm_path);
+		metadata_data->shm_fd = -1;
+		metadata_data->shm_path = shm_path;
+	}
+
 	/*
 	 * We need to get the second FD even if the first fails, because
 	 * libust expects us to read the two FDs.
 	 */
-	/* get wait fd */
-	ret = ustcomm_recv_fd(sock);
-	if (ret < 0)
+
+	/* get wait pipe path */
+	wait_pipe_path = ustcomm_recv_string(sock);
+	if (!wait_pipe_path) {
+		free(shm_path);
 		err = 1;
-	else
-		metadata_data->wait_fd = ret;
+	} else {
+		DBG("Received wait pipe path: %s\n", wait_pipe_path);
+		metadata_data->wait_fd = -1;
+		metadata_data->wait_pipe_path = wait_pipe_path;
+	}
+
+
 	if (err)
 		goto error;
 	*_metadata_data = metadata_data;
@@ -204,6 +228,7 @@ int ustctl_create_channel(int sock, int session_handle,
 	struct ustcomm_ust_reply lur;
 	struct lttng_ust_object_data *channel_data;
 	int ret, err = 0;
+	char *shm_path, *wait_pipe_path;
 
 	if (!chops || !_channel_data)
 		return -EINVAL;
@@ -234,22 +259,31 @@ int ustctl_create_channel(int sock, int session_handle,
 	channel_data->handle = lur.ret_val;
 	DBG("received channel handle %u", channel_data->handle);
 	channel_data->memory_map_size = lur.u.channel.memory_map_size;
-	/* get shm fd */
-	ret = ustcomm_recv_fd(sock);
-	if (ret < 0)
+	/* get shm path */
+	shm_path = ustcomm_recv_string(sock);
+	if (!shm_path) {
 		err = 1;
-	else
-		channel_data->shm_fd = ret;
+	} else {
+		DBG("Received shm path: %s\n", shm_path);
+		channel_data->shm_fd = -1;
+		channel_data->shm_path = shm_path;
+	}
+
 	/*
 	 * We need to get the second FD even if the first fails, because
 	 * libust expects us to read the two FDs.
 	 */
-	/* get wait fd */
-	ret = ustcomm_recv_fd(sock);
-	if (ret < 0)
+	/* get wait pipe path */
+	wait_pipe_path = ustcomm_recv_string(sock);
+	if (!wait_pipe_path) {
+		free(shm_path);
 		err = 1;
-	else
-		channel_data->wait_fd = ret;
+	} else {
+		DBG("Received wait pipe path: %s\n", wait_pipe_path);
+		channel_data->wait_fd = -1;
+		channel_data->wait_pipe_path = wait_pipe_path;
+	}
+
 	if (err)
 		goto error;
 	*_channel_data = channel_data;
@@ -272,7 +306,8 @@ int ustctl_create_stream(int sock, struct lttng_ust_object_data *channel_data,
 	struct ustcomm_ust_msg lum;
 	struct ustcomm_ust_reply lur;
 	struct lttng_ust_object_data *stream_data;
-	int ret, fd, err = 0;
+	int ret, err = 0;
+	char *shm_path, *wait_pipe_path;
 
 	if (!channel_data || !_stream_data)
 		return -EINVAL;
@@ -297,22 +332,31 @@ int ustctl_create_stream(int sock, struct lttng_ust_object_data *channel_data,
 	stream_data->handle = lur.ret_val;
 	DBG("received stream handle %u", stream_data->handle);
 	stream_data->memory_map_size = lur.u.stream.memory_map_size;
-	/* get shm fd */
-	fd = ustcomm_recv_fd(sock);
-	if (fd < 0)
+	/* get shm path */
+	shm_path = ustcomm_recv_string(sock);
+	if (!shm_path) {
 		err = 1;
-	else
-		stream_data->shm_fd = fd;
+	} else {
+		DBG("Received shm path: %s\n", shm_path);
+		stream_data->shm_fd = -1;
+		stream_data->shm_path = shm_path;
+	}
+
 	/*
 	 * We need to get the second FD even if the first fails, because
 	 * libust expects us to read the two FDs.
 	 */
-	/* get wait fd */
-	fd = ustcomm_recv_fd(sock);
-	if (fd < 0)
+	/* get wait pipe path */
+	wait_pipe_path = ustcomm_recv_string(sock);
+	if (!wait_pipe_path) {
+		free(shm_path);
 		err = 1;
-	else
-		stream_data->wait_fd = fd;
+	} else {
+		DBG("Received wait pipe path: %s\n", wait_pipe_path);
+		stream_data->wait_fd = -1;
+		stream_data->wait_pipe_path = wait_pipe_path;
+	}
+
 	if (err)
 		goto error;
 	*_stream_data = stream_data;
@@ -684,6 +728,7 @@ struct lttng_ust_lib_ring_buffer *ustctl_open_stream_read(struct lttng_ust_shm_h
 {
 	struct channel *chan;
 	int *shm_fd, *wait_fd;
+	char *shm_path, *wait_pipe_path;
 	uint64_t *memory_map_size;
 	struct lttng_ust_lib_ring_buffer *buf;
 	int ret;
@@ -693,7 +738,10 @@ struct lttng_ust_lib_ring_buffer *ustctl_open_stream_read(struct lttng_ust_shm_h
 
 	chan = handle->shadow_chan;
 	buf = channel_get_ring_buffer(&chan->backend.config,
-		chan, cpu, handle, &shm_fd, &wait_fd, &memory_map_size);
+				      chan, cpu, handle,
+				      &shm_fd, &shm_path,
+				      &wait_fd, &wait_pipe_path,
+				      &memory_map_size);
 	if (!buf)
 		return NULL;
 	ret = lib_ring_buffer_open_read(buf, handle, 1);

@@ -20,6 +20,7 @@
 
 #include "shm.h"
 #include <unistd.h>
+#include <string.h>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>	/* For mode constants */
@@ -32,6 +33,8 @@
 #include <helper.h>
 #include <limits.h>
 #include <helper.h>
+/* FIXME: Include UUID the proper way, e.g. config.h... */
+#include <uuid/uuid.h>
 
 /*
  * Ensure we have the required amount of space available by writing 0
@@ -81,39 +84,95 @@ struct shm_object_table *shm_object_table_create(size_t max_nb_obj)
 	return table;
 }
 
+/*
+ * Generate a unique name with the desired prefix.
+ * Pattern is as follow: prefix-pid-uuid.
+ * Caller is responsible of freeing the resulting string.
+ */
+static
+char *gen_unique_name(const char *prefix)
+{
+	int written;
+	pid_t pid;
+	uuid_t uuid;
+	char uuid_str[37];
+	char tmp_name[NAME_MAX];
+	char *name;
+
+	if (!prefix)
+		return NULL;
+
+	pid = getpid();
+
+	uuid_generate(uuid);
+	uuid_unparse(uuid, uuid_str);
+
+	written = snprintf(tmp_name, NAME_MAX,
+			   "%s-%d-%s", prefix, pid, uuid_str);
+
+	if (written < 0 || written >= NAME_MAX)
+		return NULL;
+
+	name = zmalloc(written + 1);
+
+	if (!name)
+		return NULL;
+
+	return strncpy(name, tmp_name, written);
+}
+
 struct shm_object *shm_object_table_append(struct shm_object_table *table,
 					   size_t memory_map_size)
 {
-	int shmfd, waitfd[2], ret, i, sigblocked = 0;
+	int shmfd, ret, sigblocked = 0;
 	struct shm_object *obj;
 	char *memory_map;
+
+	const char *base_shm      = "/dev/shm/";
+	const char *base_path     = "/tmp/lttng-fds/";
+	const char *waitfd_prefix = "ust-wait";
+	const char *shm_prefix    = "ust-shm";
+
+	char *wait_pipe_path, *wait_pipe_file;
+	char *shm_path, *shm_symlink_path, *shm_file;
+
 	char tmp_name[NAME_MAX] = "ust-shm-tmp-XXXXXX";
+
 	sigset_t all_sigs, orig_sigs;
 
 	if (table->allocated_len >= table->size)
 		return NULL;
 	obj = &table->objects[table->allocated_len];
 
-	/* wait_fd: create pipe */
-	ret = pipe(waitfd);
+	wait_pipe_file = gen_unique_name(waitfd_prefix);
+
+	if (!wait_pipe_file) {
+		goto error_gen_unique_wait;
+	}
+
+	wait_pipe_path = zmalloc(strlen(base_path)
+				 + strlen(wait_pipe_file) + 1);
+
+	if (!wait_pipe_path) {
+		free(wait_pipe_file);
+		goto error_wait_alloc;
+	}
+
+	strncat(wait_pipe_path, base_path, strlen(base_path));
+	strncat(wait_pipe_path, wait_pipe_file, strlen(wait_pipe_file));
+
+	free(wait_pipe_file);
+
+	/* wait_fd: create named pipe */
+	ret = mkfifo(wait_pipe_path, 0777);
 	if (ret < 0) {
-		PERROR("pipe");
-		goto error_pipe;
+		PERROR("mkfifo");
+		goto error_mkfifo;
 	}
-	for (i = 0; i < 2; i++) {
-		ret = fcntl(waitfd[i], F_SETFD, FD_CLOEXEC);
-		if (ret < 0) {
-			PERROR("fcntl");
-			goto error_fcntl;
-		}
-	}
-	/* The write end of the pipe needs to be non-blocking */
-	ret = fcntl(waitfd[1], F_SETFL, O_NONBLOCK);
-	if (ret < 0) {
-		PERROR("fcntl");
-		goto error_fcntl;
-	}
-	memcpy(obj->wait_fd, waitfd, sizeof(waitfd));
+
+	obj->wait_fd[0] = -1;
+	obj->wait_fd[1] = -1;
+	obj->wait_pipe_path = wait_pipe_path;
 
 	/* shm_fd: create shm */
 
@@ -131,10 +190,6 @@ struct shm_object *shm_object_table_append(struct shm_object_table *table,
 	sigblocked = 1;
 
 	/*
-	 * Allocate shm, and immediately unlink its shm oject, keeping
-	 * only the file descriptor as a reference to the object. If it
-	 * already exists (caused by short race window during which the
-	 * global object exists in a concurrent shm_open), simply retry.
 	 * We specifically do _not_ use the / at the beginning of the
 	 * pathname so that some OS implementations can keep it local to
 	 * the process (POSIX leaves this implementation-defined).
@@ -156,17 +211,54 @@ struct shm_object *shm_object_table_append(struct shm_object_table *table,
 		PERROR("shm_open");
 		goto error_shm_open;
 	}
-	ret = shm_unlink(tmp_name);
-	if (ret < 0 && errno != ENOENT) {
-		PERROR("shm_unlink");
-		goto error_shm_release;
-	}
+
 	sigblocked = 0;
 	ret = pthread_sigmask(SIG_SETMASK, &orig_sigs, NULL);
 	if (ret == -1) {
 		PERROR("pthread_sigmask");
 		goto error_sigmask_release;
 	}
+
+	/* Create unique symlink to shm */
+	shm_path = zmalloc(strlen(base_shm) + strlen(tmp_name) + 1);
+
+	if (!shm_path) {
+		goto error_shm_alloc;
+	}
+
+	strncat(shm_path, base_shm, strlen(base_shm));
+	strncat(shm_path, tmp_name, strlen(tmp_name));
+
+	shm_file = gen_unique_name(shm_prefix);
+
+	if (!shm_file) {
+		free(shm_path);
+		goto error_gen_unique_shm;
+	}
+
+	shm_symlink_path = zmalloc(strlen(base_path) + strlen(shm_file) + 1);
+
+	if (!shm_symlink_path) {
+		free(shm_path);
+		free(shm_file);
+		goto error_symlink_alloc;
+	}
+
+	strncat(shm_symlink_path, base_path, strlen(base_path));
+	strncat(shm_symlink_path, shm_file, strlen(shm_file));
+
+	free(shm_file);
+
+	ret = symlink(shm_path, shm_symlink_path);
+	if (ret < 0) {
+		PERROR("symlink");
+		free(shm_path);
+		free(shm_symlink_path);
+		goto error_symlink_shm;
+	}
+
+	free(shm_path);
+
 	ret = zero_file(shmfd, memory_map_size);
 	if (ret) {
 		PERROR("zero_file");
@@ -178,6 +270,7 @@ struct shm_object *shm_object_table_append(struct shm_object_table *table,
 		goto error_ftruncate;
 	}
 	obj->shm_fd = shmfd;
+	obj->shm_path = shm_symlink_path;
 
 	/* memory_map: mmap */
 	memory_map = mmap(NULL, memory_map_size, PROT_READ | PROT_WRITE,
@@ -195,8 +288,12 @@ struct shm_object *shm_object_table_append(struct shm_object_table *table,
 
 error_mmap:
 error_ftruncate:
-error_shm_release:
 error_zero_file:
+	free(shm_symlink_path);
+error_symlink_shm:
+error_symlink_alloc:
+error_gen_unique_shm:
+error_shm_alloc:
 error_sigmask_release:
 	ret = close(shmfd);
 	if (ret) {
@@ -211,17 +308,11 @@ error_shm_open:
 		}
 	}
 error_pthread_sigmask:
-error_fcntl:
-	for (i = 0; i < 2; i++) {
-		ret = close(waitfd[i]);
-		if (ret) {
-			PERROR("close");
-			assert(0);
-		}
-	}
-error_pipe:
+error_mkfifo:
+	free(wait_pipe_path);
+error_wait_alloc:
+error_gen_unique_wait:
 	return NULL;
-	
 }
 
 struct shm_object *shm_object_table_append_shadow(struct shm_object_table *table,
@@ -276,6 +367,11 @@ void shmp_object_destroy(struct shm_object *obj)
 			assert(0);
 		}
 	}
+
+	if (obj->shm_path) {
+		free(obj->shm_path);
+	}
+
 	for (i = 0; i < 2; i++) {
 		if (obj->wait_fd[i] < 0)
 			continue;
@@ -284,6 +380,10 @@ void shmp_object_destroy(struct shm_object *obj)
 			PERROR("close");
 			assert(0);
 		}
+	}
+
+	if (obj->wait_pipe_path) {
+		free(obj->wait_pipe_path);
 	}
 }
 

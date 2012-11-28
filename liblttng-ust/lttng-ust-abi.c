@@ -418,7 +418,9 @@ int lttng_abi_create_channel(int session_objd,
 				  chan_param->switch_timer_interval,
 				  chan_param->read_timer_interval,
 				  &uargs->channel.shm_fd,
+				  &uargs->channel.shm_path,
 				  &uargs->channel.wait_fd,
+				  &uargs->channel.wait_pipe_path,
 				  &uargs->channel.memory_map_size,
 				  &chan_priv_init);
 	if (!chan) {
@@ -617,9 +619,9 @@ int lttng_abi_open_stream(int channel_objd, struct lttng_ust_stream *info,
 	int stream_objd, ret;
 
 	buf = channel->ops->buffer_read_open(channel->chan, channel->handle,
-			&uargs->stream.shm_fd,
-			&uargs->stream.wait_fd,
-			&uargs->stream.memory_map_size);
+		     &uargs->stream.shm_fd, &uargs->stream.shm_path,
+		     &uargs->stream.wait_fd, &uargs->stream.wait_pipe_path,
+		     &uargs->stream.memory_map_size);
 	if (!buf)
 		return -ENOENT;
 

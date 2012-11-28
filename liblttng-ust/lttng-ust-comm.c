@@ -252,6 +252,7 @@ int handle_message(struct sock_info *sock_info,
 	const struct lttng_ust_objd_ops *ops;
 	struct ustcomm_ust_reply lur;
 	int shm_fd, wait_fd;
+	char *shm_path, *wait_pipe_path;
 	union ust_args args;
 
 	ust_lock();
@@ -310,14 +311,18 @@ end:
 			 * Use lum.u output.
 			 */
 			lur.u.stream.memory_map_size = *args.stream.memory_map_size;
-			shm_fd = *args.stream.shm_fd;
-			wait_fd = *args.stream.wait_fd;
+			shm_fd         = *args.stream.shm_fd;
+			shm_path       = args.stream.shm_path;
+			wait_fd        = *args.stream.wait_fd;
+			wait_pipe_path = args.stream.wait_pipe_path;
 			break;
 		case LTTNG_UST_METADATA:
 		case LTTNG_UST_CHANNEL:
 			lur.u.channel.memory_map_size = *args.channel.memory_map_size;
-			shm_fd = *args.channel.shm_fd;
-			wait_fd = *args.channel.wait_fd;
+			shm_fd         = *args.channel.shm_fd;
+			shm_path       = args.channel.shm_path;
+			wait_fd        = *args.channel.wait_fd;
+			wait_pipe_path = args.channel.wait_pipe_path;
 			break;
 		case LTTNG_UST_TRACER_VERSION:
 			lur.u.version = lum->u.version;
@@ -339,23 +344,19 @@ end:
 			&& lur.ret_code == USTCOMM_OK) {
 		int sendret = 0;
 
-		/* we also need to send the file descriptors. */
-		ret = ustcomm_send_fds_unix_sock(sock,
-			&shm_fd, &shm_fd,
-			1, sizeof(int));
+		/* send the shm path */
+		ret = ustcomm_send_string(sock, shm_path, strlen(shm_path));
 		if (ret < 0) {
-			perror("send shm_fd");
+			perror("send shm_path");
 			sendret = ret;
 		}
 		/*
 		 * The sessiond expects 2 file descriptors, even upon
 		 * error.
 		 */
-		ret = ustcomm_send_fds_unix_sock(sock,
-			&wait_fd, &wait_fd,
-			1, sizeof(int));
+		ret = ustcomm_send_string(sock, wait_pipe_path, strlen(wait_pipe_path));
 		if (ret < 0) {
-			perror("send wait_fd");
+			perror("send wait_pipe_path");
 			goto error;
 		}
 		if (sendret) {

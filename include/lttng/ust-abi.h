@@ -128,7 +128,9 @@ struct lttng_ust_tracepoint_iter {
 struct lttng_ust_object_data {
 	int handle;
 	int shm_fd;
+	char *shm_path;
 	int wait_fd;
+	char *wait_pipe_path;
 	uint64_t memory_map_size;
 	char padding[LTTNG_UST_OBJECT_DATA_PADDING];
 };
@@ -198,12 +200,16 @@ struct lttng_ust_obj;
 union ust_args {
 	struct {
 		int *shm_fd;
+		char *shm_path;
 		int *wait_fd;
+		char *wait_pipe_path;
 		uint64_t *memory_map_size;
 	} channel;
 	struct {
 		int *shm_fd;
+		char *shm_path;
 		int *wait_fd;
+		char *wait_pipe_path;
 		uint64_t *memory_map_size;
 	} stream;
 };

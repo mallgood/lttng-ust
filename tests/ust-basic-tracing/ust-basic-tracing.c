@@ -207,13 +207,17 @@ int consume_stream(struct lttng_ust_shm_handle *handle, int cpu, char *outfile)
 	struct lttng_ust_lib_ring_buffer *buf;
 	int outfd, ret;
 	int *shm_fd, *wait_fd;
+	char *shm_path, *wait_pipe_path;
 	uint64_t *memory_map_size;
 
 	chan = shmp(handle, handle->chan);
 
 	/* open stream */
 	buf = channel_get_ring_buffer(&chan->backend.config,
-		chan, cpu, handle, &shm_fd, &wait_fd, &memory_map_size);
+				      chan, cpu, handle,
+				      &shm_fd, &shm_path,
+				      &wait_fd, &wait_pipe_path,
+				      &memory_map_size);
 	if (!buf)
 		return -ENOENT;
 	ret = lib_ring_buffer_open_read(buf, handle, 1);

@@ -413,7 +413,8 @@ struct ltt_channel *_channel_create(const char *name,
 				size_t subbuf_size, size_t num_subbuf,
 				unsigned int switch_timer_interval,
 				unsigned int read_timer_interval,
-				int **shm_fd, int **wait_fd,
+				int **shm_fd, char **shm_path,
+				int **wait_fd, char **wait_pipe_path,
 				uint64_t **memory_map_size,
 				struct ltt_channel *chan_priv_init)
 {
@@ -426,7 +427,8 @@ struct ltt_channel *_channel_create(const char *name,
 			chan_priv_init,
 			buf_addr, subbuf_size, num_subbuf,
 			switch_timer_interval, read_timer_interval,
-			shm_fd, wait_fd, memory_map_size);
+			shm_fd, shm_path, wait_fd, wait_pipe_path,
+			memory_map_size);
 	if (!handle)
 		return NULL;
 	ltt_chan = priv;
@@ -443,17 +445,19 @@ void ltt_channel_destroy(struct ltt_channel *ltt_chan)
 
 static
 struct lttng_ust_lib_ring_buffer *ltt_buffer_read_open(struct channel *chan,
-					     struct lttng_ust_shm_handle *handle,
-					     int **shm_fd, int **wait_fd,
-					     uint64_t **memory_map_size)
+						       struct lttng_ust_shm_handle *handle,
+						       int **shm_fd, char **shm_path,
+						       int **wait_fd, char **wait_pipe_path,
+						       uint64_t **memory_map_size)
 {
 	struct lttng_ust_lib_ring_buffer *buf;
 	int cpu;
 
 	for_each_channel_cpu(cpu, chan) {
 		buf = channel_get_ring_buffer(&client_config, chan,
-				cpu, handle, shm_fd, wait_fd,
-				memory_map_size);
+					      cpu, handle, shm_fd, shm_path,
+					      wait_fd, wait_pipe_path,
+					      memory_map_size);
 		if (!lib_ring_buffer_open_read(buf, handle, 0))
 			return buf;
 	}
@@ -550,11 +554,13 @@ int ltt_flush_buffer(struct channel *chan, struct lttng_ust_shm_handle *handle)
 
 	for_each_channel_cpu(cpu, chan) {
 		int *shm_fd, *wait_fd;
+		char *shm_path, *wait_pipe_path;
 		uint64_t *memory_map_size;
 
 		buf = channel_get_ring_buffer(&client_config, chan,
-				cpu, handle, &shm_fd, &wait_fd,
-				&memory_map_size);
+					      cpu, handle, &shm_fd, &shm_path,
+					      &wait_fd, &wait_pipe_path,
+					      &memory_map_size);
 		lib_ring_buffer_switch(&client_config, buf,
 				SWITCH_ACTIVE, handle);
 	}

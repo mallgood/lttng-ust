@@ -439,7 +439,8 @@ struct lttng_ust_shm_handle *channel_create(const struct lttng_ust_lib_ring_buff
 		   void *buf_addr, size_t subbuf_size,
 		   size_t num_subbuf, unsigned int switch_timer_interval,
 		   unsigned int read_timer_interval,
-		   int **shm_fd, int **wait_fd, uint64_t **memory_map_size)
+		   int **shm_fd, char **shm_path,
+		   int **wait_fd, char **wait_pipe_path, uint64_t **memory_map_size)
 {
 	int ret, cpu;
 	size_t shmsize, chansize;
@@ -530,7 +531,7 @@ struct lttng_ust_shm_handle *channel_create(const struct lttng_ust_lib_ring_buff
 		lib_ring_buffer_start_read_timer(buf, handle);
 	}
 	ref = &handle->chan._ref;
-	shm_get_object_data(handle, ref, shm_fd, wait_fd, memory_map_size);
+	shm_get_object_data(handle, ref, shm_fd, shm_path, wait_fd, wait_pipe_path, memory_map_size);
 	return handle;
 
 error_backend_init:
@@ -629,22 +630,23 @@ struct lttng_ust_lib_ring_buffer *channel_get_ring_buffer(
 					const struct lttng_ust_lib_ring_buffer_config *config,
 					struct channel *chan, int cpu,
 					struct lttng_ust_shm_handle *handle,
-					int **shm_fd, int **wait_fd,
+					int **shm_fd, char **shm_path,
+					int **wait_fd, char **wait_pipe_path,
 					uint64_t **memory_map_size)
 {
 	struct shm_ref *ref;
 
 	if (config->alloc == RING_BUFFER_ALLOC_GLOBAL) {
 		ref = &chan->backend.buf[0].shmp._ref;
-		shm_get_object_data(handle, ref, shm_fd, wait_fd,
-			memory_map_size);
+		shm_get_object_data(handle, ref, shm_fd, shm_path,
+				    wait_fd, wait_pipe_path, memory_map_size);
 		return shmp(handle, chan->backend.buf[0].shmp);
 	} else {
 		if (cpu >= num_possible_cpus())
 			return NULL;
 		ref = &chan->backend.buf[cpu].shmp._ref;
-		shm_get_object_data(handle, ref, shm_fd, wait_fd,
-			memory_map_size);
+		shm_get_object_data(handle, ref, shm_fd, shm_path,
+				    wait_fd, wait_pipe_path, memory_map_size);
 		return shmp(handle, chan->backend.buf[cpu].shmp);
 	}
 }

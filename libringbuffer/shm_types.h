@@ -27,9 +27,11 @@
 struct channel;
 
 struct shm_object {
-	size_t index;	/* within the object table */
-	int shm_fd;	/* shm fd */
-	int wait_fd[2];	/* fd for wait/wakeup */
+	size_t index;	      /* within the object table */
+	int shm_fd;	      /* shm fd */
+	char *shm_path;       /* shm path */
+	int wait_fd[2];	      /* fd for wait/wakeup */
+	char *wait_pipe_path; /* named pipe path for wait/wakeup */
 	char *memory_map;
 	int is_shadow;
 	size_t memory_map_size;

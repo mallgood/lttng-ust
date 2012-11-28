@@ -119,7 +119,9 @@ int shm_get_wait_fd(struct lttng_ust_shm_handle *handle, struct shm_ref *ref)
 
 static inline
 int shm_get_object_data(struct lttng_ust_shm_handle *handle, struct shm_ref *ref,
-		int **shm_fd, int **wait_fd, uint64_t **memory_map_size)
+			int **shm_fd, char **shm_path,
+			int **wait_fd, char **wait_pipe_path,
+			uint64_t **memory_map_size)
 {
 	struct shm_object_table *table = handle->table;
 	struct shm_object *obj;
@@ -129,8 +131,10 @@ int shm_get_object_data(struct lttng_ust_shm_handle *handle, struct shm_ref *ref
 	if (caa_unlikely(index >= table->allocated_len))
 		return -EPERM;
 	obj = &table->objects[index];
-	*shm_fd = &obj->shm_fd;
-	*wait_fd = &obj->wait_fd[0];
+	*shm_fd   = &obj->shm_fd;
+	*shm_path = obj->shm_path;
+	*wait_fd        = &obj->wait_fd[0];
+	*wait_pipe_path = obj->wait_pipe_path;
 	*memory_map_size = &obj->allocated_len;
 	return 0;
 }
