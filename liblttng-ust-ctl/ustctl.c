@@ -237,6 +237,36 @@ error:
 	return -EINVAL;
 }
 
+int ustctl_open_wait_pipe(int sock,
+			  struct lttng_ust_object_data *channel_data)
+{
+	struct ustcomm_ust_msg lum;
+	struct ustcomm_ust_reply lur;
+	int ret;
+
+	if (!channel_data)
+		return -EINVAL;
+
+	/* Create metadata channel */
+	memset(&lum, 0, sizeof(lum));
+	lum.handle = channel_data->handle;
+	lum.cmd = LTTNG_UST_STREAM_PIPE;
+	ret = ustcomm_send_app_cmd(sock, &lum, &lur);
+
+	if (ret) {
+		goto error;
+	}
+	if (lur.ret_code != USTCOMM_OK) {
+		ret = lur.ret_code;
+		goto error;
+	}
+
+	return 0;
+
+error:
+	return ret;
+}
+
 int ustctl_create_channel(int sock, int session_handle,
 		struct lttng_ust_channel_attr *chops,
 		struct lttng_ust_object_data **_channel_data)

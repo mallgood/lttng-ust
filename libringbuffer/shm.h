@@ -25,6 +25,7 @@
 #include <usterr-signal-safe.h>
 #include <urcu/compiler.h>
 #include "shm_types.h"
+#include <fcntl.h>
 
 /*
  * Pointer dereferencing. We don't trust the shm_ref, so we validate
@@ -99,8 +100,37 @@ int shm_get_wakeup_fd(struct lttng_ust_shm_handle *handle, struct shm_ref *ref)
 	if (caa_unlikely(index >= table->allocated_len))
 		return -EPERM;
 	obj = &table->objects[index];
-	return obj->wait_fd[1];
 
+	return obj->wait_fd[1];
+}
+
+static inline
+int shm_open_wakeup_pipe(struct lttng_ust_shm_handle *handle, struct shm_ref *ref)
+{
+	struct shm_object_table *table = handle->table;
+	struct shm_object *obj;
+	size_t index;
+	int fd, ret = -1;
+
+	index = (size_t) ref->index;
+	if (caa_unlikely(index >= table->allocated_len))
+		return -EPERM;
+
+	obj = &table->objects[index];
+
+	if (obj->wait_fd[1] < 0 && obj->wait_pipe_path != NULL) {
+		fd = open(obj->wait_pipe_path, O_WRONLY);
+		if (fd < 0) {
+			ret = -1;
+		} else {
+			/* FIXME: What if fcntl fail? */
+			fcntl(fd, F_SETFD, FD_CLOEXEC);
+			obj->wait_fd[1] = fd;
+			ret = 0;
+		}
+	}
+
+	return ret;
 }
 
 static inline

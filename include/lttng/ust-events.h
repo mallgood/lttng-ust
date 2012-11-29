@@ -332,6 +332,7 @@ struct ltt_channel_ops {
 	int (*is_finalized)(struct channel *chan);
 	int (*is_disabled)(struct channel *chan);
 	int (*flush_buffer)(struct channel *chan, struct lttng_ust_shm_handle *handle);
+	int (*channel_open_pipe)(struct channel *chan, struct lttng_ust_shm_handle *handle);
 };
 
 struct ltt_channel {

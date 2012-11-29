@@ -438,6 +438,34 @@ struct ltt_channel *_channel_create(const char *name,
 }
 
 static
+int ltt_channel_open_pipe(struct channel *chan,
+			  struct lttng_ust_shm_handle *handle)
+{
+	struct shm_ref *ref;
+	int cpu = 0;
+
+	if (client_config.alloc == RING_BUFFER_ALLOC_GLOBAL) {
+		ref = &chan->backend.buf[0].shmp._ref;
+		return shm_open_wakeup_pipe(handle, ref);
+	} else {
+		if (cpu >= num_possible_cpus()) {
+			goto error;
+		}
+
+		for_each_possible_cpu(cpu) {
+			ref = &chan->backend.buf[cpu].shmp._ref;
+			if (shm_open_wakeup_pipe(handle, ref) < 0) {
+				goto error;
+			}
+		}
+	}
+
+	return 0;
+error:
+	return -1;
+}
+
+static
 void ltt_channel_destroy(struct ltt_channel *ltt_chan)
 {
 	channel_destroy(ltt_chan->chan, ltt_chan->handle, 0);
@@ -571,6 +599,7 @@ static struct ltt_transport ltt_relay_transport = {
 	.name = "relay-" RING_BUFFER_MODE_TEMPLATE_STRING "-mmap",
 	.ops = {
 		.channel_create = _channel_create,
+		.channel_open_pipe = ltt_channel_open_pipe,
 		.channel_destroy = ltt_channel_destroy,
 		.buffer_read_open = ltt_buffer_read_open,
 		.buffer_read_close = ltt_buffer_read_close,
