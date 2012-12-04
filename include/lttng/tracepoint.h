@@ -235,19 +235,14 @@ extern struct tracepoint_dlopen tracepoint_dlopen;
 		__attribute__((used, section("__tracepoints_ptrs"))) =		\
 			&__tracepoint_##_provider##___##_name;
 
-/*
- * These weak symbols, the constructor, and destructor take care of
- * registering only _one_ instance of the tracepoints per shared-ojbect
- * (or for the whole main program).
- */
 extern struct tracepoint * const __start___tracepoints_ptrs[]
-	__attribute__((weak, visibility("hidden")));
+	__attribute__((visibility("hidden")));
 extern struct tracepoint * const __stop___tracepoints_ptrs[]
-	__attribute__((weak, visibility("hidden")));
+	__attribute__((visibility("hidden")));
 int __tracepoint_registered
-	__attribute__((weak, visibility("hidden")));
+	__attribute__((visibility("hidden")));
 struct tracepoint_dlopen tracepoint_dlopen
-	__attribute__((weak, visibility("hidden")));
+	__attribute__((visibility("hidden")));
 
 static void __attribute__((constructor)) __tracepoints__init(void)
 {
