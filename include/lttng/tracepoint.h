@@ -249,30 +249,26 @@ static void __attribute__((constructor)) __tracepoints__init(void)
 	if (__tracepoint_registered++)
 		return;
 
-	tracepoint_dlopen.liblttngust_handle =
-		dlopen("liblttng-ust-tracepoint.so.0", RTLD_NOW | RTLD_GLOBAL);
-	if (!tracepoint_dlopen.liblttngust_handle)
-		return;
 	tracepoint_dlopen.tracepoint_register_lib =
 		URCU_FORCE_CAST(int (*)(struct tracepoint * const *, int),
-				dlsym(tracepoint_dlopen.liblttngust_handle,
+				dlsym(RTLD_DEFAULT,
 					"tracepoint_register_lib"));
 	tracepoint_dlopen.tracepoint_unregister_lib =
 		URCU_FORCE_CAST(int (*)(struct tracepoint * const *),
-				dlsym(tracepoint_dlopen.liblttngust_handle,
+				dlsym(RTLD_DEFAULT,
 					"tracepoint_unregister_lib"));
 #ifndef _LGPL_SOURCE
 	tracepoint_dlopen.rcu_read_lock_sym_bp =
 		URCU_FORCE_CAST(void (*)(void),
-				dlsym(tracepoint_dlopen.liblttngust_handle,
+				dlsym(RTLD_DEFAULT,
 					"tp_rcu_read_lock_bp"));
 	tracepoint_dlopen.rcu_read_unlock_sym_bp =
 		URCU_FORCE_CAST(void (*)(void),
-				dlsym(tracepoint_dlopen.liblttngust_handle,
+				dlsym(RTLD_DEFAULT,
 					"tp_rcu_read_unlock_bp"));
 	tracepoint_dlopen.rcu_dereference_sym_bp =
 		URCU_FORCE_CAST(void *(*)(void *p),
-				dlsym(tracepoint_dlopen.liblttngust_handle,
+				dlsym(RTLD_DEFAULT,
 					"tp_rcu_dereference_sym_bp"));
 #endif
 	tracepoint_dlopen.tracepoint_register_lib(__start___tracepoints_ptrs,
