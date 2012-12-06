@@ -369,6 +369,7 @@ void shmp_object_destroy(struct shm_object *obj)
 	}
 
 	if (obj->shm_path) {
+		unlink(obj->shm_path);
 		free(obj->shm_path);
 	}
 
@@ -383,6 +384,7 @@ void shmp_object_destroy(struct shm_object *obj)
 	}
 
 	if (obj->wait_pipe_path) {
+		unlink(obj->wait_pipe_path);
 		free(obj->wait_pipe_path);
 	}
 }
