@@ -1,0 +1,69 @@
+CYGWIN LTTNG-UST PORT INSTALLATION & USAGE INSTRUCTIONS
+-------------------------------------------------------
+
+The Cygwin lttng-ust port is an *experimental* development branch based on
+the lttng-ust 2.0 stable version. This port is a *prototype* and should not be
+deployed in production.
+
+The latest version of the development branch can be found at:
+  * lttng-ust:   git://git.lttng.org/lttng-ust.git -b cygwin-2.0-experimental
+
+PREREQUISITES
+
+- Cygwin 1.7.x available here: http://cygwin.com/setup.exe
+
+- lttng-ust dependencies (Cygwin packages available through setup.exe)
+    * autoconf
+    * automake
+    * gcc4
+    * libtool
+    * libuuid-devel
+    * libuuid1
+
+INSTALLATION INSTRUCTIONS:
+
+The Cygwin lttng-ust port should be installed by carefully following the
+outlined instructions below:
+
+* lttng-ust
+
+  - Start a Cygwin shell.
+
+  - Download lttng-ust sources:
+
+    git clone git://git.lttng.org/lttng-ust.git -b cygwin-2.0-experimental
+
+  - Change directory and run the bootstrap script:
+
+    cd lttng-ust
+    ./bootstrap
+
+  - Run the configure script with these parameters:
+    LDFLAGS="-no-undefined" ./configure --prefix=/usr
+
+  - Run the make command and install lttng-ust
+    make
+    make install
+
+INSTRUMENTATION:
+
+Refer the to the lttng-ust(3) man page
+(Online version: http://lttng.org/files/doc/man-pages/man3/lttng-ust.3.html).
+
+CYGWIN PORT LIMITATIONS:
+
+- Since Cygwin doesn't support file descriptor passing over UNIX socket,
+  the SHMs (shared memory) and wait pipes are exposed via the filesystem in
+  /tmp/lttng-fds. This is a potential security issue.
+
+  For more information see commit bf5ff35ed0a3a7f60e92d654a5b97e73b94da852
+  in lttng-ust.
+
+- Applications need to be linked against liblttng-ust-tracepoint.
+  LD_PRELOAD is not supported.
+  See commit ecab630c1e78a4b720f448917e92d43ada48d06d in lttng-ust for
+  more information.
+
+- liblttng-ust-fork and liblttng-ust-libc-wrapper are not supported.
+  See commit cbd7f39d9267e24159023db91712ca91558c5cc8 in lttng-ust for
+  more information.
